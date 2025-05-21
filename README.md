@@ -65,7 +65,7 @@ The project follows Clean Architecture principles with the following layers:
 
 5. Run the application:
    ```
-   poetry run uvicorn src.interface.main:app --reload
+   poetry run python -m src.main
    ```
 
 ### Running Tests
@@ -84,7 +84,7 @@ Connect to the WebSocket endpoint at `/ws` with a valid authentication token.
 
 Example:
 ```
-ws://localhost:8000/ws?token=your-auth-token
+ws://localhost:8000/ws
 ```
 
 ## License

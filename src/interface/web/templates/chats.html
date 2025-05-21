@@ -1,0 +1,1171 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+    .chat-list {
+        overflow-y: auto;
+        height: calc(100vh - 150px);
+    }
+    
+    .message-area {
+        display: flex;
+        flex-direction: column;
+        height: calc(100vh - 110px);
+    }
+    
+    .messages {
+        flex-grow: 1;
+        overflow-y: auto;
+        padding: 15px;
+    }
+    
+    .message-input {
+        padding: 15px;
+        border-top: 1px solid #dee2e6;
+    }
+    
+    .chat-item {
+        padding: 10px 15px;
+        border-bottom: 1px solid #f0f0f0;
+        cursor: pointer;
+    }
+    
+    .chat-item:hover {
+        background-color: #f8f9fa;
+    }
+    
+    .chat-item.active {
+        background-color: #e7f1ff;
+        border-left: 3px solid #0d6efd;
+    }
+    
+    .avatar {
+        width: 40px;
+        height: 40px;
+        background-color: #0d6efd;
+        color: white;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        margin-right: 15px;
+    }
+    
+    .chat-header {
+        padding: 15px;
+        border-bottom: 1px solid #dee2e6;
+        background-color: #f8f9fa;
+    }
+</style>
+
+<div class="container-fluid py-0">
+    <div class="row" style="height: calc(100vh - 56px);">
+        <!-- Chats sidebar -->
+        <div class="col-md-3 px-0 border-end">
+            <div class="bg-white py-3 px-3 border-bottom d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Chats</h5>
+                <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#newChatModal">
+                    <span>+</span> New
+                </button>
+            </div>
+            <div class="input-group p-2">
+                <input type="text" class="form-control" id="chatSearchInput" placeholder="Search chats...">
+                <button class="btn btn-outline-primary" type="button" id="chatSearchButton">
+                    <i class="bi bi-search"></i>
+                </button>
+            </div>
+            <div class="chat-list" id="chatList">
+                <!-- Chats will be loaded here -->
+                <div class="d-flex justify-content-center py-4">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Chat content -->
+        <div class="col-md-9 px-0">
+            <div class="chat-header d-flex align-items-center">
+                <div class="avatar" id="currentChatAvatar" data-user-id="{{ user.id }}"></div>
+                <div class="flex-grow-1">
+                    <h5 class="mb-0" id="currentChatName">Select a chat</h5>
+                    <small class="text-muted" id="currentChatStatus"></small>
+                </div>
+                <div>
+                    <button class="btn btn-sm btn-outline-primary me-2" id="addUserButton" style="display:none;">Add User</button>
+                    <button class="btn btn-sm btn-outline-primary" id="chatInfoButton" style="display:none;">Info</button>
+                </div>
+            </div>
+            <div class="message-area">
+                <div class="messages" id="messagesList">
+                    <div class="d-flex justify-content-center align-items-center h-100">
+                        <p class="text-muted">Select a chat to start messaging</p>
+                    </div>
+                </div>
+                <div class="message-input bg-white">
+                    <form id="messageForm" class="d-flex">
+                        <input type="text" class="form-control me-2" id="messageInput" placeholder="Type a message..." disabled>
+                        <button type="submit" class="btn btn-primary" disabled>Send</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- New Chat Modal -->
+<div class="modal fade" id="newChatModal" tabindex="-1" aria-labelledby="newChatModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="newChatModalLabel">Start New Chat</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label for="chatType" class="form-label">Chat Type</label>
+                    <select class="form-select" id="chatType">
+                        <option value="private">Private Chat</option>
+                        <option value="group">Group Chat</option>
+                    </select>
+                </div>
+                
+                <div id="privateUserSelect">
+                    <div class="mb-3">
+                        <label for="userSearch" class="form-label">Search User</label>
+                        <input type="text" class="form-control" id="userSearch" placeholder="Search by username...">
+                    </div>
+                    <div id="userSearchResults" class="list-group">
+                        <!-- Search results will appear here -->
+                        <div class="text-center py-2 text-muted">
+                            Type to search for users
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="groupChatCreate" style="display: none;">
+                    <div class="mb-3">
+                        <label for="groupName" class="form-label">Group Name</label>
+                        <input type="text" class="form-control" id="groupName" placeholder="Enter group name">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Add Participants</label>
+                        <input type="text" class="form-control mb-2" id="groupUserSearch" placeholder="Search users to add...">
+                        <div id="groupUserSearchResults" class="list-group mb-2">
+                            <!-- Group user search results will appear here -->
+                        </div>
+                        <div class="selected-users" id="selectedGroupUsers">
+                            <!-- Selected users will appear here -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="createChatButton">Create Chat</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add User to Chat Modal -->
+<div class="modal fade" id="addUserModal" tabindex="-1" aria-labelledby="addUserModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="addUserModalLabel">Add User to Chat</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label for="addUserSearch" class="form-label">Search User</label>
+                    <input type="text" class="form-control" id="addUserSearch" placeholder="Search by username...">
+                </div>
+                <div id="addUserSearchResults" class="list-group">
+                    <!-- Search results will appear here -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // DOM elements
+        const chatList = document.getElementById('chatList');
+        const messagesList = document.getElementById('messagesList');
+        const messageForm = document.getElementById('messageForm');
+        const messageInput = document.getElementById('messageInput');
+        const currentChatName = document.getElementById('currentChatName');
+        const currentChatAvatar = document.getElementById('currentChatAvatar');
+        const currentChatStatus = document.getElementById('currentChatStatus');
+        const addUserButton = document.getElementById('addUserButton');
+        const chatInfoButton = document.getElementById('chatInfoButton');
+        
+        // New chat modal elements
+        const chatType = document.getElementById('chatType');
+        const privateUserSelect = document.getElementById('privateUserSelect');
+        const groupChatCreate = document.getElementById('groupChatCreate');
+        const userSearch = document.getElementById('userSearch');
+        const userSearchResults = document.getElementById('userSearchResults');
+        const groupName = document.getElementById('groupName');
+        const groupUserSearch = document.getElementById('groupUserSearch');
+        const groupUserSearchResults = document.getElementById('groupUserSearchResults');
+        const selectedGroupUsers = document.getElementById('selectedGroupUsers');
+        const createChatButton = document.getElementById('createChatButton');
+        
+        // Add user modal elements
+        const addUserSearch = document.getElementById('addUserSearch');
+        const addUserSearchResults = document.getElementById('addUserSearchResults');
+        
+        // State variables
+        let currentChatId = null;
+        let selectedGroupUserIds = [];
+        let lastMessageTimestamp = null;
+        let draftWebSocket = null;
+        let draftTimeoutId = null;
+        const DRAFT_TYPING_DELAY = 150; // ms to wait before sending draft update
+        
+        // Draft message tracking
+        messageInput.addEventListener('input', function() {
+            // Clear any pending timeout
+            if (draftTimeoutId) {
+                clearTimeout(draftTimeoutId);
+            }
+            
+            // Only process drafts when a chat is selected
+            if (!currentChatId) return;
+            
+            // Set a new timeout to send draft after delay
+            draftTimeoutId = setTimeout(() => {
+                saveDraft(currentChatId, messageInput.value);
+            }, DRAFT_TYPING_DELAY);
+        });
+        
+        // Helper function to generate avatar initials
+        function generateAvatarInitials(name) {
+            if (!name) return "??";
+            
+            const parts = name.trim().split(/\s+/);
+            if (parts.length >= 2) {
+                return (parts[0][0] + parts[1][0]).toUpperCase();
+            } else if (parts.length === 1 && parts[0]) {
+                if (parts[0].length >= 2) {
+                    return parts[0].slice(0, 2).toUpperCase();
+                } else if (parts[0].length === 1) {
+                    return (parts[0][0] + parts[0][0]).toUpperCase();
+                }
+            }
+            return "??";
+        }
+        
+        // Helper function to truncate text
+        function truncateText(text, maxLength = 30) {
+            if (!text || text.length <= maxLength) return text;
+            return text.substring(0, maxLength) + '...';
+        }
+        
+        // Check if we have a chat_id to open directly
+        const urlChatId = '{{ chat_id if chat_id else "" }}';
+        console.log('URL Chat ID:', urlChatId); // Debug log
+        
+        // Check if we need to open the new chat modal (when redirected from dashboard)
+        const openNewChatModal = localStorage.getItem('openNewChatModal');
+        if (openNewChatModal) {
+            // Remove the item from localStorage
+            localStorage.removeItem('openNewChatModal');
+            
+            // Set chat type if specified
+            if (openNewChatModal === 'group') {
+                chatType.value = 'group';
+                privateUserSelect.style.display = 'none';
+                groupChatCreate.style.display = 'block';
+            }
+            
+            // Open the modal
+            setTimeout(() => {
+                const modal = new bootstrap.Modal(document.getElementById('newChatModal'));
+                modal.show();
+            }, 500); // Small delay to ensure everything is loaded
+        }
+        
+        // Initialize WebSocket connection for real-time messaging
+        wsClient.on('message', handleWebSocketMessage);
+        wsClient.connect();
+        
+        // Handle incoming WebSocket messages
+        function handleWebSocketMessage(message) {
+            // If it's a chat message and matches the current chat, append it
+            if (message.type === 'message' && message.message.chat_id === currentChatId) {
+                appendNewMessage(message.message);
+                
+                // Mark the message as read
+                if (message.message.sender_id !== '{{ user.id }}') {
+                    markMessageAsRead(message.message.id);
+                }
+                
+                // Refresh chat list to update last message in sidebar
+                fetchChats();
+            } else if (message.type === 'message') {
+                // If it's a message for another chat, refresh the chat list to update unread count
+                fetchChats();
+            }
+            
+            // If it's a read status update, update UI
+            if (message.type === 'read_status' || message.type === 'batch_read_status' || message.type === 'all_read_status') {
+                // Future: Update read status in UI
+            }
+        }
+        
+        // Initialize chat type toggle in modal
+        chatType.addEventListener('change', function() {
+            if (this.value === 'private') {
+                privateUserSelect.style.display = 'block';
+                groupChatCreate.style.display = 'none';
+            } else {
+                privateUserSelect.style.display = 'none';
+                groupChatCreate.style.display = 'block';
+            }
+        });
+        
+        // Fetch user's chats from API
+        async function fetchChats() {
+            try {
+                const response = await api.get('/chats');
+                if (response && response.success) {
+                    renderChats(response.data);
+                } else {
+                    showError('Failed to load chats');
+                }
+            } catch (error) {
+                showError('Error loading chats: ' + error.message);
+            }
+        }
+        
+        // Fetch unread count for each chat
+        async function fetchUnreadCounts(chats) {
+            const processedChats = [...chats];
+            
+            for (let i = 0; i < processedChats.length; i++) {
+                const chat = processedChats[i];
+                try {
+                    const response = await api.get(`/messages/${chat.id}/unread_count`);
+                    if (response && response.success) {
+                        processedChats[i] = {
+                            ...chat,
+                            unread_count: response.data.unread_count || 0
+                        };
+                    }
+                } catch (error) {
+                    console.error(`Error fetching unread count for chat ${chat.id}:`, error);
+                }
+            }
+            
+            return processedChats;
+        }
+        
+        // Render chats to DOM
+        function renderChats(chats) {
+            if (!chats || chats.length === 0) {
+                chatList.innerHTML = '<div class="text-center py-4">No chats found</div>';
+                return;
+            }
+            
+            // First show loading spinner to indicate activity while fetching user info
+            chatList.innerHTML = `
+            <div class="d-flex justify-content-center py-4">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </div>
+            `;
+            
+            // Process all chats and fetch necessary user info
+            processChats(chats).then(processedChats => {
+                // Fetch unread counts for each chat
+                return fetchUnreadCounts(processedChats);
+            }).then(processedChats => {
+                // Sort chats by last message timestamp (newest first)
+                processedChats.sort((a, b) => {
+                    // If no last message, put at the bottom
+                    if (!a.last_message && !b.last_message) return 0;
+                    if (!a.last_message) return 1;
+                    if (!b.last_message) return -1;
+                    
+                    // Sort by created_at date
+                    const dateA = new Date(a.last_message.created_at || 0);
+                    const dateB = new Date(b.last_message.created_at || 0);
+                    return dateB - dateA; // Descending order (newest first)
+                });
+                
+                let html = '';
+                processedChats.forEach(chat => {
+                    const isGroup = chat.type === 'group';
+                    const participant = chat.participants.find(p => p.user_id !== '{{ user.id }}');
+                    const chatName = isGroup ? chat.name : (participant?.user_name || participant?.username || 'Unknown User');
+                    const initials = generateAvatarInitials(chatName);
+                    
+                    // Get last message if available
+                    const lastMessage = chat.last_message || { text: 'No messages yet', created_at: '' };
+                    const lastMessageText = truncateText(lastMessage.text);
+                    
+                    // Format the time properly
+                    let lastMessageTime = '';
+                    if (lastMessage.created_at) {
+                        const msgDate = new Date(lastMessage.created_at);
+                        if (!isNaN(msgDate.getTime())) {
+                            lastMessageTime = msgDate.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                        }
+                    }
+                    
+                    // Check for unread messages
+                    const unreadBadge = chat.unread_count ? 
+                        `<span class="badge rounded-pill bg-danger ms-2">${chat.unread_count}</span>` : '';
+                    
+                    html += `
+                    <div class="chat-item d-flex align-items-center" data-chat-id="${chat.id}" data-chat-type="${chat.type}">
+                        <div class="avatar">${initials}</div>
+                        <div class="flex-grow-1">
+                            <div class="d-flex justify-content-between">
+                                <h6 class="mb-1">${chatName} ${unreadBadge}</h6>
+                                <small class="text-muted">${lastMessageTime || ''}</small>
+                            </div>
+                            <p class="mb-0 text-truncate" style="max-width: 180px;">${lastMessageText}</p>
+                        </div>
+                    </div>
+                    `;
+                });
+                
+                chatList.innerHTML = html;
+                
+                // Add event listeners to chat items
+                document.querySelectorAll('.chat-item').forEach(item => {
+                    item.addEventListener('click', function() {
+                        // Get chat details
+                        const chatId = this.getAttribute('data-chat-id');
+                        const chatType = this.getAttribute('data-chat-type');
+                        
+                        // If selecting a different chat, save or discard draft in the previous chat
+                        if (currentChatId && currentChatId !== chatId && messageInput.value.trim()) {
+                            // Store draft in the previous chat
+                            saveDraft(currentChatId, messageInput.value);
+                        }
+                        
+                        // Update current chat
+                        currentChatId = chatId;
+                        
+                        // Highlight the selected chat
+                        document.querySelectorAll('.chat-item').forEach(i => i.classList.remove('active'));
+                        this.classList.add('active');
+                        
+                        // Get chat name from the clicked item
+                        const chatNameEl = this.querySelector('h6');
+                        if (chatNameEl) {
+                            currentChatName.textContent = chatNameEl.textContent.replace(/\d+/, '').trim(); // Remove badge number
+                        }
+                        
+                        // Set avatar
+                        const avatarEl = this.querySelector('.avatar');
+                        if (avatarEl) {
+                            currentChatAvatar.innerHTML = avatarEl.innerHTML;
+                            currentChatAvatar.className = avatarEl.className;
+                        }
+                        
+                        // Update status to show chat type
+                        currentChatStatus.textContent = chatType === 'group' ? 'Group Chat' : 'Private Chat';
+                        
+                        // Enable message input and button
+                        messageInput.disabled = false;
+                        messageForm.querySelector('button').disabled = false;
+                        
+                        // Show buttons based on chat type
+                        addUserButton.style.display = chatType === 'group' ? 'inline-block' : 'none';
+                        chatInfoButton.style.display = 'inline-block';
+                        
+                        // Connect to draft WebSocket
+                        connectDraftWebSocket(chatId);
+                        
+                        // Load chat messages
+                        loadChatMessages(chatId);
+                        
+                        // Mark all messages as read in this chat
+                        markAllMessagesAsRead(chatId);
+                        
+                        // Remove unread badge
+                        const badge = this.querySelector('.badge');
+                        if (badge) badge.remove();
+                    });
+                });
+            });
+        }
+        
+        // Process chats to fetch missing user information
+        async function processChats(chats) {
+            const userCache = {};
+            
+            // Process all chats in parallel
+            const processedChats = await Promise.all(chats.map(async chat => {
+                // Clone chat to avoid modifying the original
+                const processedChat = { ...chat };
+                
+                // Skip additional processing for group chats
+                if (processedChat.type === 'group') {
+                    return processedChat;
+                }
+                
+                // For private chats, we need user information
+                const participants = [...processedChat.participants];
+                
+                // Process each participant that isn't the current user
+                for (let i = 0; i < participants.length; i++) {
+                    const participant = participants[i];
+                    if (participant.user_id === '{{ user.id }}') continue;
+                    
+                    // If we don't have user name or username, fetch user details
+                    if (!participant.user_name && !participant.username) {
+                        // Check if we've already fetched this user
+                        if (!userCache[participant.user_id]) {
+                            try {
+                                const response = await api.get(`/users/${participant.user_id}`);
+                                if (response && response.success) {
+                                    userCache[participant.user_id] = response.data;
+                                }
+                            } catch (error) {
+                                console.error(`Error fetching user ${participant.user_id}:`, error);
+                            }
+                        }
+                        
+                        // Update participant with fetched user data
+                        if (userCache[participant.user_id]) {
+                            const userData = userCache[participant.user_id];
+                            participants[i] = {
+                                ...participant,
+                                user_name: userData.name,
+                                username: userData.username
+                            };
+                        }
+                    }
+                }
+                
+                // Update chat with processed participants
+                processedChat.participants = participants;
+                return processedChat;
+            }));
+            
+            return processedChats;
+        }
+        
+        // Load chat messages
+        function loadChatMessages(chatId) {
+            // Clear existing messages
+            messagesList.innerHTML = `
+            <div class="d-flex justify-content-center py-4">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </div>
+            `;
+            
+            // Reset pagination state
+            lastMessageTimestamp = null;
+            
+            // Fetch messages from API
+            api.get(`/messages/${chatId}`).then(response => {
+                if (response && response.success) {
+                    const messages = Array.isArray(response.data) ? response.data : [];
+                    
+                    if (messages.length === 0) {
+                        messagesList.innerHTML = `
+                        <div class="d-flex justify-content-center align-items-center h-100">
+                            <p class="text-muted">No messages yet. Start the conversation!</p>
+                        </div>
+                        `;
+                        return;
+                    }
+                    
+                    // Render messages
+                    messagesList.innerHTML = '';
+                    
+                    // Sort messages by created_at timestamp to ensure they're in chronological order
+                    const sortedMessages = [...messages].sort((a, b) => {
+                        const dateA = new Date(a.created_at);
+                        const dateB = new Date(b.created_at);
+                        return dateA - dateB; // Ascending order (oldest first)
+                    });
+                    
+                    sortedMessages.forEach(message => {
+                        appendMessageToUI(message);
+                    });
+                    
+                    // Scroll to bottom
+                    messagesList.scrollTop = messagesList.scrollHeight;
+                    
+                    // Collect IDs of unread messages from others to mark as read
+                    const unreadMessageIds = messages
+                        .filter(msg => !msg.is_read && msg.sender_id !== '{{ user.id }}')
+                        .map(msg => msg.id);
+                    
+                    // Mark messages as read in batches if there are any unread
+                    if (unreadMessageIds.length > 0) {
+                        markMessagesAsRead(unreadMessageIds);
+                    }
+                } else {
+                    messagesList.innerHTML = `
+                    <div class="d-flex justify-content-center align-items-center h-100">
+                        <p class="text-danger">Failed to load messages</p>
+                    </div>
+                    `;
+                }
+            }).catch(error => {
+                messagesList.innerHTML = `
+                <div class="d-flex justify-content-center align-items-center h-100">
+                    <p class="text-danger">Error: ${error.message}</p>
+                </div>
+                `;
+            });
+        }
+        
+        // Mark single message as read
+        function markMessageAsRead(messageId) {
+            api.post(`/messages/${messageId}/read`).catch(error => {
+                console.error('Error marking message as read:', error);
+            });
+        }
+        
+        // Mark multiple messages as read
+        function markMessagesAsRead(messageIds) {
+            if (!messageIds || messageIds.length === 0) return;
+            
+            api.post(`/messages/read/batch`, {
+                message_ids: messageIds
+            }).catch(error => {
+                console.error('Error marking messages as read:', error);
+            });
+        }
+        
+        // Mark all messages in a chat as read
+        function markAllMessagesAsRead(chatId) {
+            api.post(`/messages/${chatId}/read_all`).catch(error => {
+                console.error('Error marking all messages as read:', error);
+            });
+        }
+        
+        // Add a single message to the UI
+        function appendMessageToUI(message) {
+            const isOwnMessage = message.sender_id === '{{ user.id }}';
+            
+            // Handle timestamp properly
+            let timeString = '';
+            if (message.created_at) {
+                const timestamp = new Date(message.created_at);
+                if (!isNaN(timestamp.getTime())) {
+                    timeString = timestamp.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                }
+            }
+            
+            const messageHtml = `
+            <div class="d-flex justify-content-${isOwnMessage ? 'end' : 'start'} mb-2">
+                <div class="card ${isOwnMessage ? 'bg-primary text-white' : 'bg-light'}" style="max-width: 75%;">
+                    <div class="card-body py-2 px-3">
+                        <p class="mb-1">${message.text}</p>
+                        <small class="${isOwnMessage ? 'text-white-50' : 'text-muted'}">${timeString}</small>
+                    </div>
+                </div>
+            </div>
+            `;
+            
+            messagesList.insertAdjacentHTML('beforeend', messageHtml);
+        }
+        
+        // Append a new incoming message
+        function appendNewMessage(message) {
+            // Clear existing placeholder if any
+            if (messagesList.querySelector('.text-muted')) {
+                messagesList.innerHTML = '';
+            }
+            
+            appendMessageToUI(message);
+            
+            // Scroll to bottom
+            messagesList.scrollTop = messagesList.scrollHeight;
+        }
+        
+        // Show error message
+        function showError(message) {
+            chatList.innerHTML = `<div class="text-center py-4 text-danger">${message}</div>`;
+        }
+        
+        // User search for creating private chat
+        userSearch.addEventListener('input', debounce(async function() {
+            const searchTerm = this.value.trim();
+            if (searchTerm.length < 2) {
+                userSearchResults.innerHTML = '<div class="text-center py-2 text-muted">Type at least 2 characters to search</div>';
+                return;
+            }
+            
+            try {
+                const response = await api.get(`/users?search=${encodeURIComponent(searchTerm)}`);
+                if (response && response.success) {
+                    renderUserSearchResults(response.data, userSearchResults, true);
+                } else {
+                    userSearchResults.innerHTML = '<div class="text-center py-2 text-danger">Search failed</div>';
+                }
+            } catch (error) {
+                userSearchResults.innerHTML = `<div class="text-center py-2 text-danger">Error: ${error.message}</div>`;
+            }
+        }, 300));
+        
+        // Group user search
+        groupUserSearch.addEventListener('input', debounce(async function() {
+            const searchTerm = this.value.trim();
+            if (searchTerm.length < 2) {
+                groupUserSearchResults.innerHTML = '';
+                return;
+            }
+            
+            try {
+                const response = await api.get(`/users?search=${encodeURIComponent(searchTerm)}`);
+                if (response && response.success) {
+                    renderUserSearchResults(response.data, groupUserSearchResults, false);
+                }
+            } catch (error) {
+                groupUserSearchResults.innerHTML = `<div class="text-center py-2 text-danger">Error: ${error.message}</div>`;
+            }
+        }, 300));
+        
+        // Add user to group chat
+        addUserSearch.addEventListener('input', debounce(async function() {
+            const searchTerm = this.value.trim();
+            if (searchTerm.length < 2) {
+                addUserSearchResults.innerHTML = '';
+                return;
+            }
+            
+            try {
+                const response = await api.get(`/users?search=${encodeURIComponent(searchTerm)}`);
+                if (response && response.success) {
+                    renderAddUserSearchResults(response.data);
+                }
+            } catch (error) {
+                addUserSearchResults.innerHTML = `<div class="text-center py-2 text-danger">Error: ${error.message}</div>`;
+            }
+        }, 300));
+        
+        // Render user search results
+        function renderUserSearchResults(users, container, isPrivate) {
+            if (!users || users.length === 0) {
+                container.innerHTML = '<div class="text-center py-2">No users found</div>';
+                return;
+            }
+            
+            // Filter out current user and selected users (for group chat)
+            users = users.filter(user => {
+                if (user.id === '{{ user.id }}') return false;
+                if (!isPrivate && selectedGroupUserIds.includes(user.id)) return false;
+                return true;
+            });
+            
+            if (users.length === 0) {
+                container.innerHTML = '<div class="text-center py-2">No additional users found</div>';
+                return;
+            }
+            
+            let html = '';
+            users.forEach(user => {
+                const displayName = user.name || user.username;
+                const initials = generateAvatarInitials(displayName);
+                html += `
+                <div class="list-group-item list-group-item-action d-flex align-items-center" data-user-id="${user.id}" data-user-name="${displayName}">
+                    <div class="avatar">${initials}</div>
+                    <div>
+                        <h6 class="mb-1">${displayName}</h6>
+                        <small class="text-muted">@${user.username}</small>
+                    </div>
+                </div>
+                `;
+            });
+            
+            container.innerHTML = html;
+            
+            // Add event listeners to user items
+            container.querySelectorAll('.list-group-item').forEach(item => {
+                item.addEventListener('click', function() {
+                    const userId = this.getAttribute('data-user-id');
+                    const userName = this.getAttribute('data-user-name');
+                    
+                    if (isPrivate) {
+                        // For private chat, start a new chat with this user
+                        createPrivateChat(userId);
+                    } else {
+                        // For group chat, add user to selected users
+                        addUserToGroupSelection(userId, userName);
+                    }
+                });
+            });
+        }
+        
+        // Render add user search results
+        function renderAddUserSearchResults(users) {
+            if (!users || users.length === 0) {
+                addUserSearchResults.innerHTML = '<div class="text-center py-2">No users found</div>';
+                return;
+            }
+            
+            // Filter out current user and users already in chat
+            // TODO: Get current chat participants and filter them out
+            
+            let html = '';
+            users.forEach(user => {
+                if (user.id === '{{ user.id }}') return;
+                
+                const displayName = user.name || user.username;
+                const initials = generateAvatarInitials(displayName);
+                html += `
+                <div class="list-group-item list-group-item-action d-flex align-items-center" data-user-id="${user.id}">
+                    <div class="avatar">${initials}</div>
+                    <div class="flex-grow-1">
+                        <h6 class="mb-1">${displayName}</h6>
+                        <small class="text-muted">@${user.username}</small>
+                    </div>
+                    <button class="btn btn-sm btn-primary add-to-chat-btn">Add</button>
+                </div>
+                `;
+            });
+            
+            addUserSearchResults.innerHTML = html;
+            
+            // Add event listeners to add buttons
+            addUserSearchResults.querySelectorAll('.add-to-chat-btn').forEach(button => {
+                button.addEventListener('click', function() {
+                    const userItem = this.closest('.list-group-item');
+                    const userId = userItem.getAttribute('data-user-id');
+                    addUserToChat(userId);
+                });
+            });
+        }
+        
+        // Add user to group selection
+        function addUserToGroupSelection(userId, userName) {
+            if (selectedGroupUserIds.includes(userId)) return;
+            
+            selectedGroupUserIds.push(userId);
+            
+            const userBadge = document.createElement('span');
+            userBadge.className = 'badge bg-primary me-1 mb-1';
+            userBadge.setAttribute('data-user-id', userId);
+            userBadge.innerHTML = `${userName} <button class="btn-close btn-close-white ms-1" style="font-size: 0.5rem;"></button>`;
+            
+            selectedGroupUsers.appendChild(userBadge);
+            
+            // Add event listener to remove button
+            userBadge.querySelector('.btn-close').addEventListener('click', function() {
+                selectedGroupUserIds = selectedGroupUserIds.filter(id => id !== userId);
+                userBadge.remove();
+            });
+            
+            // Clear search
+            groupUserSearch.value = '';
+            groupUserSearchResults.innerHTML = '';
+        }
+        
+        // Create private chat
+        async function createPrivateChat(userId) {
+            try {
+                const response = await api.post('/chats/private', {
+                    user_id: userId
+                });
+                
+                if (response && response.success) {
+                    // Close modal and refresh chats
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('newChatModal'));
+                    modal.hide();
+                    fetchChats();
+                    
+                    // Clear form
+                    userSearch.value = '';
+                    userSearchResults.innerHTML = '<div class="text-center py-2 text-muted">Type to search for users</div>';
+                } else {
+                    alert(`Failed to create chat: ${response?.data?.detail || 'Unknown error'}`);
+                }
+            } catch (error) {
+                alert('Error creating chat: ' + error.message);
+            }
+        }
+        
+        // Create group chat
+        async function createGroupChat() {
+            const name = groupName.value.trim();
+            if (!name) {
+                alert('Please enter a group name');
+                return;
+            }
+            
+            if (selectedGroupUserIds.length === 0) {
+                alert('Please select at least one participant');
+                return;
+            }
+            
+            try {
+                const response = await api.post('/chats/group', {
+                    name: name,
+                    member_ids: selectedGroupUserIds
+                });
+                
+                if (response && response.success) {
+                    // Close modal and refresh chats
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('newChatModal'));
+                    modal.hide();
+                    fetchChats();
+                    
+                    // Clear form
+                    groupName.value = '';
+                    groupUserSearch.value = '';
+                    groupUserSearchResults.innerHTML = '';
+                    selectedGroupUsers.innerHTML = '';
+                    selectedGroupUserIds = [];
+                } else {
+                    alert(`Failed to create group chat: ${response?.data?.detail || 'Unknown error'}`);
+                }
+            } catch (error) {
+                alert('Error creating group chat: ' + error.message);
+            }
+        }
+        
+        // Add user to existing chat
+        async function addUserToChat(userId) {
+            if (!currentChatId) return;
+            
+            try {
+                const response = await api.post(`/chats/${currentChatId}/participants`, {
+                    user_id: userId
+                });
+                
+                if (response && response.success) {
+                    // Close modal and refresh chats
+                    const modal = bootstrap.Modal.getInstance(document.getElementById('addUserModal'));
+                    modal.hide();
+                } else {
+                    alert(`Failed to add user: ${response?.data?.detail || 'Unknown error'}`);
+                }
+            } catch (error) {
+                alert('Error adding user: ' + error.message);
+            }
+        }
+        
+        // Create chat button click
+        createChatButton.addEventListener('click', function() {
+            if (chatType.value === 'private') {
+                // For private chat, a user must be selected in the search results
+                alert('Please select a user from the search results');
+            } else {
+                // For group chat, create a new group
+                createGroupChat();
+            }
+        });
+        
+        // Add user button click
+        addUserButton.addEventListener('click', function() {
+            if (!currentChatId) return;
+            
+            // Show add user modal
+            const modal = new bootstrap.Modal(document.getElementById('addUserModal'));
+            modal.show();
+        });
+        
+        // Message form submission
+        messageForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            if (!currentChatId) {
+                alert('Please select a chat first');
+                return;
+            }
+            
+            const message = messageInput.value.trim();
+            if (!message) return;
+            
+            // Disable input and button while sending
+            const sendButton = messageForm.querySelector('button');
+            messageInput.disabled = true;
+            sendButton.disabled = true;
+            
+            // Generate a unique idempotency key
+            const idempotencyKey = Date.now().toString() + '-' + Math.random().toString(36).substr(2, 9);
+            
+            // Send message via API
+            api.post(`/messages/${currentChatId}`, {
+                text: message,
+                idempotency_key: idempotencyKey
+            }).then(response => {
+                // Clear input immediately for better UX
+                messageInput.value = '';
+                
+                // Delete the draft for this chat
+                deleteDraft(currentChatId);
+                
+                if (response && response.success) {
+                    console.log('Message sent successfully');
+                    
+                    // Add the new message to UI
+                    appendNewMessage(response.data);
+                } else {
+                    console.error('Failed to send message:', response);
+                    alert('Failed to send message: ' + (response.data ? response.data.detail : 'Unknown error'));
+                }
+            }).catch(error => {
+                console.error('Error sending message:', error);
+                alert('Error sending message: ' + error.message);
+            }).finally(() => {
+                // Re-enable input and button
+                messageInput.disabled = false;
+                sendButton.disabled = false;
+                messageInput.focus();
+            });
+        });
+        
+        // Utility function for debouncing
+        function debounce(func, wait) {
+            let timeout;
+            return function(...args) {
+                const context = this;
+                clearTimeout(timeout);
+                timeout = setTimeout(() => func.apply(context, args), wait);
+            };
+        }
+        
+        // Save draft message
+        async function saveDraft(chatId, text) {
+            if (!chatId) return;
+            
+            // Send draft update via WebSocket
+            if (draftWebSocket && draftWebSocket.readyState === WebSocket.OPEN) {
+                draftWebSocket.send(JSON.stringify({
+                    type: 'draft_update',
+                    text: text
+                }));
+            } else {
+                // Reconnect WebSocket if needed
+                connectDraftWebSocket(chatId);
+            }
+        }
+        
+        // Delete draft message
+        async function deleteDraft(chatId) {
+            if (!chatId) return;
+            
+            // Send draft delete via WebSocket
+            if (draftWebSocket && draftWebSocket.readyState === WebSocket.OPEN) {
+                draftWebSocket.send(JSON.stringify({
+                    type: 'draft_delete'
+                }));
+            }
+        }
+        
+        // Connect to draft WebSocket for current chat
+        function connectDraftWebSocket(chatId) {
+            // Close existing WebSocket if any
+            if (draftWebSocket && draftWebSocket.readyState !== WebSocket.CLOSED) {
+                draftWebSocket.close();
+            }
+            
+            // Create new WebSocket connection
+            const protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+            const wsUrl = `${protocol}${window.location.host}/ws/drafts/${chatId}`;
+            
+            draftWebSocket = new WebSocket(wsUrl);
+            
+            draftWebSocket.onopen = function() {
+                console.log('Draft WebSocket connected');
+            };
+            
+            draftWebSocket.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                
+                if (data.type === 'draft_init' || data.type === 'draft_update') {
+                    // Only update if this is the current chat and input doesn't have focus
+                    if (data.chat_id === currentChatId && !messageInput.matches(':focus')) {
+                        messageInput.value = data.text || '';
+                    }
+                } else if (data.type === 'draft_delete') {
+                    // Clear draft if this is the current chat and input doesn't have focus
+                    if (data.chat_id === currentChatId && !messageInput.matches(':focus')) {
+                        messageInput.value = '';
+                    }
+                }
+            };
+            
+            draftWebSocket.onclose = function() {
+                console.log('Draft WebSocket disconnected');
+            };
+            
+            draftWebSocket.onerror = function(error) {
+                console.error('Draft WebSocket error:', error);
+            };
+        }
+        
+        // Clean up WebSocket connections when the page is unloaded
+        window.addEventListener('beforeunload', function() {
+            if (draftWebSocket && draftWebSocket.readyState === WebSocket.OPEN) {
+                // Save any pending draft
+                if (currentChatId && messageInput.value.trim()) {
+                    saveDraft(currentChatId, messageInput.value);
+                }
+                
+                draftWebSocket.close();
+            }
+        });
+        
+        // Initial load
+        fetchChats().then(() => {
+            // If we have a chat_id to open, automatically select that chat
+            if (urlChatId) {
+                console.log('Attempting to open chat with ID:', urlChatId);
+                
+                // Wait a moment for the DOM to fully update
+                setTimeout(() => {
+                    let chatToOpen = document.querySelector(`.chat-item[data-chat-id="${urlChatId}"]`);
+                    
+                    // If not found, try with all lowercase
+                    if (!chatToOpen) {
+                        const lowerCaseId = urlChatId.toLowerCase();
+                        chatToOpen = document.querySelector(`.chat-item[data-chat-id="${lowerCaseId}"]`);
+                    }
+                    
+                    // If still not found, try checking each element
+                    if (!chatToOpen) {
+                        const allChats = document.querySelectorAll('.chat-item');
+                        const availableIds = [];
+                        
+                        allChats.forEach(chat => {
+                            const chatId = chat.getAttribute('data-chat-id');
+                            availableIds.push(chatId);
+                            
+                            // Compare IDs ignoring case
+                            if (chatId && chatId.toLowerCase() === urlChatId.toLowerCase()) {
+                                chatToOpen = chat;
+                            }
+                        });
+                        
+                        console.log('Available chat IDs:', availableIds);
+                    }
+                    
+                    if (chatToOpen) {
+                        console.log('Chat found, opening:', chatToOpen);
+                        chatToOpen.click(); // Simulate a click to open the chat
+                    } else {
+                        console.error('Chat element not found in DOM for ID:', urlChatId);
+                    }
+                    // Try to find the chat element - first try exact match
+                }, 150); // Slightly longer timeout to ensure chats are loaded
+            }
+        });
+    });
+</script>
+{% endblock %} 

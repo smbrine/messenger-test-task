@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container auth-container">
+    <div class="card">
+        <div class="card-header text-center bg-white py-3">
+            <h4 class="mb-0">Create Account</h4>
+        </div>
+        <div class="card-body p-4">
+            <form id="register-form">
+                <div class="mb-3">
+                    <label for="name" class="form-label">Full Name</label>
+                    <input type="text" class="form-control" id="name" required>
+                </div>
+                <div class="mb-3">
+                    <label for="username" class="form-label">Username</label>
+                    <input type="text" class="form-control" id="username" required>
+                </div>
+                <div class="mb-3">
+                    <label for="phone" class="form-label">Phone</label>
+                    <input type="text" class="form-control" id="phone">
+                </div>
+                <div class="mb-3">
+                    <label for="password" class="form-label">Password</label>
+                    <input type="password" class="form-control" id="password" required>
+                </div>
+                <div class="d-grid gap-2 mt-4">
+                    <button type="submit" class="btn btn-primary">Create Account</button>
+                    <a href="/web/login" class="btn btn-outline-primary">Already have an account? Sign In</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endblock %} 

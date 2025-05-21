@@ -1,0 +1,289 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row">
+        <div class="col-md-4 mb-4">
+            <div class="card h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Recent Chats</h5>
+                    <a href="/web/chats" class="btn btn-sm btn-outline-primary">View All</a>
+                </div>
+                <div class="card-body p-0">
+                    <div class="list-group list-group-flush" id="recentChats">
+                        <div class="d-flex justify-content-center py-4">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4 mb-4">
+            <div class="card h-100">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Recent Users</h5>
+                    <a href="/web/users" class="btn btn-sm btn-outline-primary">View All</a>
+                </div>
+                <div class="card-body p-0">
+                    <div class="list-group list-group-flush" id="recentUsers">
+                        <div class="d-flex justify-content-center py-4">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4 mb-4">
+            <div class="card h-100">
+                <div class="card-header">
+                    <h5 class="mb-0">Quick Actions</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-3">
+                        <button class="btn btn-primary" type="button" id="newPrivateChatBtn">New Private Chat</button>
+                        <button class="btn btn-primary" type="button" id="newGroupChatBtn">Create Group Chat</button>
+                        <button class="btn btn-outline-primary" type="button" id="findUsersBtn">Find Users</button>
+                    </div>
+                    <hr>
+                    <div class="alert alert-info">
+                        <h6 class="mb-1">Welcome, {{ user.name }}!</h6>
+                        <p class="mb-0">Start chatting with your contacts or create a new group.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const recentChats = document.getElementById('recentChats');
+        const recentUsers = document.getElementById('recentUsers');
+        const newPrivateChatBtn = document.getElementById('newPrivateChatBtn');
+        const newGroupChatBtn = document.getElementById('newGroupChatBtn');
+        const findUsersBtn = document.getElementById('findUsersBtn');
+        
+        // Helper function to generate avatar initials
+        function generateAvatarInitials(name) {
+            if (!name) return "??";
+            
+            const parts = name.trim().split(/\s+/);
+            if (parts.length >= 2) {
+                return (parts[0][0] + parts[1][0]).toUpperCase();
+            } else if (parts.length === 1 && parts[0]) {
+                if (parts[0].length >= 2) {
+                    return parts[0].slice(0, 2).toUpperCase();
+                } else if (parts[0].length === 1) {
+                    return (parts[0][0] + parts[0][0]).toUpperCase();
+                }
+            }
+            return "??";
+        }
+        
+        // Helper function to truncate text
+        function truncateText(text, maxLength = 30) {
+            if (!text || text.length <= maxLength) return text;
+            return text.substring(0, maxLength) + '...';
+        }
+        
+        // Fetch recent chats
+        async function fetchRecentChats() {
+            try {
+                const response = await api.get('/chats?limit=3');
+                if (response && response.success) {
+                    renderRecentChats(response.data);
+                } else {
+                    showChatsError('Failed to load chats');
+                }
+            } catch (error) {
+                showChatsError('Error loading chats: ' + error.message);
+            }
+        }
+        
+        // Render recent chats
+        function renderRecentChats(chats) {
+            if (!chats || chats.length === 0) {
+                recentChats.innerHTML = '<div class="text-center py-4">No chats found</div>';
+                return;
+            }
+            
+            // First show loading spinner to indicate activity while fetching user info
+            recentChats.innerHTML = `
+            <div class="d-flex justify-content-center py-4">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+            </div>
+            `;
+            
+            // Process all chats and fetch necessary user info
+            processChats(chats).then(processedChats => {
+                let html = '';
+                processedChats.slice(0, 3).forEach(chat => {
+                    const isGroup = chat.type === 'group';
+                    const participant = chat.participants.find(p => p.user_id !== '{{ user.id }}');
+                    const chatName = isGroup ? chat.name : (participant?.user_name || participant?.username || 'Unknown User');
+                    const initials = generateAvatarInitials(chatName);
+                    
+                    // Get last message if available
+                    const lastMessage = chat.last_message?.text || 'No messages yet';
+                    const lastMessageText = truncateText(lastMessage);
+                    
+                    html += `
+                    <a href="/web/chats?chat_id=${chat.id}" class="list-group-item list-group-item-action d-flex align-items-center p-3">
+                        <div class="avatar">${initials}</div>
+                        <div>
+                            <h6 class="mb-1">${chatName}</h6>
+                            <p class="mb-0 text-muted small">Last message: ${lastMessageText}</p>
+                        </div>
+                    </a>
+                    `;
+                });
+                
+                recentChats.innerHTML = html;
+            });
+        }
+        
+        // Process chats to fetch missing user information
+        async function processChats(chats) {
+            const userCache = {};
+            
+            // Process all chats in parallel
+            const processedChats = await Promise.all(chats.map(async chat => {
+                // Clone chat to avoid modifying the original
+                const processedChat = { ...chat };
+                
+                // Skip additional processing for group chats
+                if (processedChat.type === 'group') {
+                    return processedChat;
+                }
+                
+                // For private chats, we need user information
+                const participants = [...processedChat.participants];
+                
+                // Process each participant that isn't the current user
+                for (let i = 0; i < participants.length; i++) {
+                    const participant = participants[i];
+                    if (participant.user_id === '{{ user.id }}') continue;
+                    
+                    // If we don't have user name or username, fetch user details
+                    if (!participant.user_name && !participant.username) {
+                        // Check if we've already fetched this user
+                        if (!userCache[participant.user_id]) {
+                            try {
+                                const response = await api.get(`/users/${participant.user_id}`);
+                                if (response && response.success) {
+                                    userCache[participant.user_id] = response.data;
+                                }
+                            } catch (error) {
+                                console.error(`Error fetching user ${participant.user_id}:`, error);
+                            }
+                        }
+                        
+                        // Update participant with fetched user data
+                        if (userCache[participant.user_id]) {
+                            const userData = userCache[participant.user_id];
+                            participants[i] = {
+                                ...participant,
+                                user_name: userData.name,
+                                username: userData.username
+                            };
+                        }
+                    }
+                }
+                
+                // Update chat with processed participants
+                processedChat.participants = participants;
+                return processedChat;
+            }));
+            
+            return processedChats;
+        }
+        
+        // Show chats error
+        function showChatsError(message) {
+            recentChats.innerHTML = `<div class="text-center py-4 text-danger">${message}</div>`;
+        }
+        
+        // Fetch recent users
+        async function fetchRecentUsers() {
+            try {
+                const response = await api.get('/users?limit=3');
+                if (response && response.success) {
+                    renderRecentUsers(response.data);
+                } else {
+                    showUsersError('Failed to load users');
+                }
+            } catch (error) {
+                showUsersError('Error loading users: ' + error.message);
+            }
+        }
+        
+        // Render recent users
+        function renderRecentUsers(users) {
+            if (!users || users.length === 0) {
+                recentUsers.innerHTML = '<div class="text-center py-4">No users found</div>';
+                return;
+            }
+            
+            // Filter out current user
+            users = users.filter(user => user.id !== '{{ user.id }}');
+            
+            if (users.length === 0) {
+                recentUsers.innerHTML = '<div class="text-center py-4">No other users found</div>';
+                return;
+            }
+            
+            let html = '';
+            users.slice(0, 3).forEach(user => {
+                const displayName = user.name || user.username;
+                const initials = generateAvatarInitials(displayName);
+                
+                html += `
+                <a href="/web/users" class="list-group-item list-group-item-action d-flex align-items-center p-3">
+                    <div class="avatar">${initials}</div>
+                    <div>
+                        <h6 class="mb-1">${displayName}</h6>
+                        <p class="mb-0 text-muted small">@${user.username}</p>
+                    </div>
+                </a>
+                `;
+            });
+            
+            recentUsers.innerHTML = html;
+        }
+        
+        // Show users error
+        function showUsersError(message) {
+            recentUsers.innerHTML = `<div class="text-center py-4 text-danger">${message}</div>`;
+        }
+        
+        // Quick action buttons
+        newPrivateChatBtn.addEventListener('click', function() {
+            window.location.href = '/web/chats';
+            // Open new chat modal on arrival
+            localStorage.setItem('openNewChatModal', 'private');
+        });
+        
+        newGroupChatBtn.addEventListener('click', function() {
+            window.location.href = '/web/chats';
+            // Open new chat modal on arrival and select group option
+            localStorage.setItem('openNewChatModal', 'group');
+        });
+        
+        findUsersBtn.addEventListener('click', function() {
+            window.location.href = '/web/users';
+        });
+        
+        // Initial load
+        fetchRecentChats();
+        fetchRecentUsers();
+    });
+</script>
+{% endblock %} 

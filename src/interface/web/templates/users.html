@@ -1,0 +1,186 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row">
+        <div class="col-lg-8 mx-auto">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">All Users</h5>
+                    <div class="input-group" style="max-width: 300px;">
+                        <input type="text" class="form-control" id="userSearchInput" placeholder="Search users...">
+                        <button class="btn btn-outline-primary" type="button" id="userSearchButton">
+                            <i class="bi bi-search"></i> Search
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body p-0">
+                    <div class="list-group list-group-flush user-list" id="usersList">
+                        <!-- Users will be loaded here -->
+                        <div class="d-flex justify-content-center py-4">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <nav aria-label="Users pagination">
+                        <ul class="pagination justify-content-center mb-0" id="usersPagination">
+                            <li class="page-item disabled">
+                                <a class="page-link" href="#" tabindex="-1" aria-disabled="true">Previous</a>
+                            </li>
+                            <li class="page-item active" aria-current="page">
+                                <a class="page-link" href="#">1</a>
+                            </li>
+                            <li class="page-item">
+                                <a class="page-link" href="#">Next</a>
+                            </li>
+                        </ul>
+                    </nav>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // DOM elements
+        const usersList = document.getElementById('usersList');
+        const userSearchInput = document.getElementById('userSearchInput');
+        const userSearchButton = document.getElementById('userSearchButton');
+        const usersPagination = document.getElementById('usersPagination');
+        
+        // Helper function to generate avatar initials
+        function generateAvatarInitials(name) {
+            if (!name) return "??";
+            
+            const parts = name.trim().split(/\s+/);
+            if (parts.length >= 2) {
+                return (parts[0][0] + parts[1][0]).toUpperCase();
+            } else if (parts.length === 1 && parts[0]) {
+                if (parts[0].length >= 2) {
+                    return parts[0].slice(0, 2).toUpperCase();
+                } else if (parts[0].length === 1) {
+                    return (parts[0][0] + parts[0][0]).toUpperCase();
+                }
+            }
+            return "??";
+        }
+        
+        // Fetch users from API
+        async function fetchUsers() {
+            try {
+                const response = await api.get('/users');
+                if (response && response.success) {
+                    renderUsers(response.data);
+                } else {
+                    showError('Failed to load users');
+                }
+            } catch (error) {
+                showError('Error loading users: ' + error.message);
+            }
+        }
+        
+        // Render users to DOM
+        function renderUsers(users) {
+            if (!users || users.length === 0) {
+                usersList.innerHTML = '<div class="text-center py-4">No users found</div>';
+                return;
+            }
+            
+            let html = '';
+            users.forEach(user => {
+                // Skip current user
+                if (user.id === '{{ user.id }}') return;
+                
+                const displayName = user.name || user.username;
+                const initials = generateAvatarInitials(displayName);
+                html += `
+                <div class="list-group-item d-flex align-items-center p-3" data-user-id="${user.id}">
+                    <div class="avatar">${initials}</div>
+                    <div class="flex-grow-1">
+                        <h6 class="mb-1">${displayName}</h6>
+                        <p class="mb-0 text-muted small">@${user.username}</p>
+                    </div>
+                    <div>
+                        <button class="btn btn-sm btn-primary start-chat-btn">Message</button>
+                    </div>
+                </div>
+                `;
+            });
+            
+            usersList.innerHTML = html;
+            
+            // Add event listeners to start chat buttons
+            document.querySelectorAll('.start-chat-btn').forEach(button => {
+                button.addEventListener('click', function() {
+                    const userItem = this.closest('.list-group-item');
+                    const userId = userItem.getAttribute('data-user-id');
+                    const userName = userItem.querySelector('h6').textContent;
+                    createPrivateChat(userId, userName);
+                });
+            });
+        }
+        
+        // Create private chat with selected user
+        async function createPrivateChat(userId, userName) {
+            try {
+                const response = await api.post('/chats/private', {
+                    user_id: userId
+                });
+                
+                if (response && response.success) {
+                    window.location.href = `/web/chats/${response.data.id}`;
+                } else {
+                    alert(`Failed to create chat: ${response?.data?.detail || 'Unknown error'}`);
+                }
+            } catch (error) {
+                alert('Error creating chat: ' + error.message);
+            }
+        }
+        
+        // Show error message
+        function showError(message) {
+            usersList.innerHTML = `<div class="text-center py-4 text-danger">${message}</div>`;
+        }
+        
+        // Search functionality
+        userSearchButton.addEventListener('click', function() {
+            const searchTerm = userSearchInput.value.trim();
+            if (searchTerm) {
+                fetchUsersBySearch(searchTerm);
+            } else {
+                fetchUsers();
+            }
+        });
+        
+        userSearchInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                userSearchButton.click();
+            }
+        });
+        
+        // Search users by username
+        async function fetchUsersBySearch(searchTerm) {
+            try {
+                // Assuming API supports search parameter
+                const response = await api.get(`/users?search=${encodeURIComponent(searchTerm)}`);
+                if (response && response.success) {
+                    renderUsers(response.data);
+                } else {
+                    showError('Search failed');
+                }
+            } catch (error) {
+                showError('Error searching users: ' + error.message);
+            }
+        }
+        
+        // Initial load
+        fetchUsers();
+    });
+</script>
+{% endblock %} 

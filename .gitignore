@@ -1,0 +1,12 @@
+.cursor
+.DS_Store
+.env
+.venv
+.pytest_cache
+.ruff_cache
+.mypy_cache
+.vscode
+.idea
+.cursor
+*.cpython*
+/__pycache__/*

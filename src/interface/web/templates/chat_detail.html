@@ -1,0 +1,597 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row">
+        <div class="col-12 mb-4">
+            <div class="d-flex justify-content-between align-items-center">
+                <div class="d-flex align-items-center">
+                    <a href="/web/chats" class="btn btn-outline-primary me-3">
+                        <i class="bi bi-arrow-left"></i> Back to Chats
+                    </a>
+                    <div class="d-flex align-items-center">
+                        <div class="avatar rounded-circle bg-primary text-white d-flex align-items-center justify-content-center me-2" style="width: 40px; height: 40px; font-size: 18px;">
+                            {{ helper_functions.generate_avatar_initials(chat.name) }}
+                        </div>
+                        <h1 class="h3 mb-0">{{ chat.name }}</h1>
+                    </div>
+                </div>
+                <div class="dropdown">
+                    <button class="btn btn-outline-secondary dropdown-toggle" type="button" id="chatActionsDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+                        Actions
+                    </button>
+                    <ul class="dropdown-menu" aria-labelledby="chatActionsDropdown">
+                        {% if chat.type == 'group' %}
+                        <li><a class="dropdown-item" href="#" id="addParticipantBtn">Add Participant</a></li>
+                        {% endif %}
+                        <li><a class="dropdown-item" href="#" id="viewParticipantsBtn">View Participants</a></li>
+                        {% if chat.type == 'group' %}
+                        <li><a class="dropdown-item" href="#" id="leaveGroupBtn">Leave Group</a></li>
+                        {% endif %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card shadow-sm">
+                <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                    <span>
+                        {{ chat.type|title }} Chat - 
+                        <span class="text-muted">{{ chat.participants|length }} participants</span>
+                    </span>
+                    <button class="btn btn-sm btn-outline-primary" id="refreshBtn" title="Refresh messages">
+                        <i class="bi bi-arrow-clockwise"></i>
+                    </button>
+                </div>
+                <div class="card-body p-0">
+                    <div id="messagesList" class="p-3" style="height: 400px; overflow-y: auto;">
+                        {% if messages|length == 0 %}
+                        <div class="d-flex justify-content-center align-items-center h-100">
+                            <p class="text-muted">No messages yet. Start the conversation!</p>
+                        </div>
+                        {% else %}
+                            {% for message in messages %}
+                            <div class="d-flex justify-content-{{ 'end' if message.is_from_current_user else 'start' }} mb-2">
+                                <div class="card {{ 'bg-primary text-white' if message.is_from_current_user else 'bg-light' }}" style="max-width: 75%;">
+                                    <div class="card-body py-2 px-3">
+                                        <p class="mb-1">{{ message.text }}</p>
+                                        <small class="{{ 'text-white-50' if message.is_from_current_user else 'text-muted' }}">
+                                            {{ message.created_at.split('T')[1].split('.')[0]|truncate(5, True, '') }}
+                                        </small>
+                                    </div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        {% endif %}
+                    </div>
+                    <div class="border-top p-3">
+                        <form id="messageForm" class="d-flex">
+                            <input type="text" id="messageInput" class="form-control me-2" placeholder="Type your message...">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-send"></i>
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Participants Modal -->
+<div class="modal fade" id="participantsModal" tabindex="-1" aria-labelledby="participantsModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="participantsModalLabel">Chat Participants</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <ul class="list-group" id="participantsList">
+                    {% for participant in chat.participants %}
+                    <li class="list-group-item d-flex justify-content-between align-items-center">
+                        <div class="d-flex align-items-center">
+                            <div class="avatar rounded-circle bg-primary text-white d-flex align-items-center justify-content-center me-2" style="width: 32px; height: 32px; font-size: 14px;">
+                                {{ helper_functions.generate_avatar_initials("User " ~ loop.index) }}
+                            </div>
+                            <div>
+                                User {{ participant.id }}
+                                {% if participant.is_current_user %}
+                                <span class="badge bg-primary">You</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <span class="badge bg-secondary">{{ participant.role }}</span>
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Participant Modal -->
+<div class="modal fade" id="addParticipantModal" tabindex="-1" aria-labelledby="addParticipantModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="addParticipantModalLabel">Add Participant</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label for="userSearch" class="form-label">Search Users</label>
+                    <input type="text" class="form-control" id="userSearch" placeholder="Enter username or name">
+                </div>
+                <div id="userSearchResults" class="list-group mt-2">
+                    <!-- User search results will be displayed here -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Elements
+        const messagesList = document.getElementById('messagesList');
+        const messageForm = document.getElementById('messageForm');
+        const messageInput = document.getElementById('messageInput');
+        const refreshBtn = document.getElementById('refreshBtn');
+        const viewParticipantsBtn = document.getElementById('viewParticipantsBtn');
+        const addParticipantBtn = document.getElementById('addParticipantBtn');
+        const leaveGroupBtn = document.getElementById('leaveGroupBtn');
+        const userSearch = document.getElementById('userSearch');
+        const userSearchResults = document.getElementById('userSearchResults');
+        
+        // Chat data
+        const chatId = '{{ chat.id }}';
+        const userId = '{{ user.id }}';
+        
+        // Draft state
+        let draftSaveTimeout = null;
+        let draftSocket = null;
+        let skipNextBroadcast = false;
+        
+        // Modals
+        const participantsModal = new bootstrap.Modal(document.getElementById('participantsModal'));
+        const addParticipantModal = new bootstrap.Modal(document.getElementById('addParticipantModal'));
+        
+        // API utility
+        const api = {
+            async request(url, method = 'GET', data = null) {
+                try {
+                    const options = {
+                        method,
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json'
+                        }
+                    };
+                    
+                    if (data) {
+                        options.body = JSON.stringify(data);
+                    }
+                    
+                    const response = await fetch(url, options);
+                    const contentType = response.headers.get('content-type');
+                    
+                    if (contentType && contentType.includes('application/json')) {
+                        const json = await response.json();
+                        return { success: response.ok, status: response.status, data: json };
+                    } else {
+                        return { success: response.ok, status: response.status };
+                    }
+                } catch (error) {
+                    console.error('API Error:', error);
+                    return { success: false, error: error.message };
+                }
+            },
+            
+            get(url) {
+                return this.request(url);
+            },
+            
+            post(url, data) {
+                return this.request(url, 'POST', data);
+            },
+            
+            put(url, data) {
+                return this.request(url, 'PUT', data);
+            },
+            
+            delete(url) {
+                return this.request(url, 'DELETE');
+            }
+        };
+        
+        // Initialize WebSocket connection for real-time updates
+        let socket;
+        
+        function initWebSocket() {
+            // Get the protocol (ws or wss)
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.host}/ws`;
+            
+            socket = new WebSocket(wsUrl);
+            
+            socket.onopen = function() {
+                console.log('WebSocket connected');
+            };
+            
+            socket.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                console.log('WebSocket message:', data);
+                
+                // Handle different message types
+                if (data.type === 'chat_message' && data.data.chat_id === chatId) {
+                    addMessageToUI(data.data);
+                } else if (data.type === 'read_receipt') {
+                    // Handle read receipts if needed
+                }
+            };
+            
+            socket.onclose = function() {
+                console.log('WebSocket disconnected');
+                // Try to reconnect after a delay
+                setTimeout(initWebSocket, 3000);
+            };
+            
+            socket.onerror = function(error) {
+                console.error('WebSocket error:', error);
+            };
+        }
+        
+        // Initialize draft WebSocket connection
+        function initDraftWebSocket() {
+            // Get the protocol (ws or wss)
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${window.location.host}/ws/drafts/${chatId}`;
+            
+            draftSocket = new WebSocket(wsUrl);
+            
+            draftSocket.onopen = function() {
+                console.log('Draft WebSocket connected');
+            };
+            
+            draftSocket.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                console.log('Draft WebSocket message:', data);
+                
+                if (data.type === 'draft_init' || data.type === 'draft_update') {
+                    // Don't update if this is our own update
+                    if (skipNextBroadcast) {
+                        skipNextBroadcast = false;
+                        return;
+                    }
+                    
+                    if (data.chat_id === chatId) {
+                        messageInput.value = data.text;
+                    }
+                } else if (data.type === 'draft_delete') {
+                    if (data.chat_id === chatId) {
+                        messageInput.value = '';
+                    }
+                }
+            };
+            
+            draftSocket.onclose = function() {
+                console.log('Draft WebSocket disconnected');
+                // Try to reconnect after a delay
+                setTimeout(initDraftWebSocket, 3000);
+            };
+            
+            draftSocket.onerror = function(error) {
+                console.error('Draft WebSocket error:', error);
+            };
+        }
+        
+        // Save draft with debounce
+        function saveDraft(text) {
+            // Clear any existing timeout
+            if (draftSaveTimeout) {
+                clearTimeout(draftSaveTimeout);
+            }
+            
+            // Set a new timeout to save the draft after a delay
+            draftSaveTimeout = setTimeout(() => {
+                if (draftSocket && draftSocket.readyState === WebSocket.OPEN) {
+                    // Tell the handler to skip the next broadcast that comes back to us
+                    skipNextBroadcast = true;
+                    
+                    // Send the draft update
+                    draftSocket.send(JSON.stringify({
+                        type: 'draft_update',
+                        text: text
+                    }));
+                }
+            }, 500); // 500ms debounce
+        }
+        
+        // Delete draft
+        function deleteDraft() {
+            if (draftSocket && draftSocket.readyState === WebSocket.OPEN) {
+                // Send the draft deletion
+                draftSocket.send(JSON.stringify({
+                    type: 'draft_delete'
+                }));
+            }
+        }
+        
+        // Add a single message to the UI
+        function addMessageToUI(message) {
+            const isFromCurrentUser = message.sender_id === userId;
+            const timestamp = new Date(message.created_at);
+            const timeString = timestamp.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            
+            const messageHtml = `
+            <div class="d-flex justify-content-${isFromCurrentUser ? 'end' : 'start'} mb-2">
+                <div class="card ${isFromCurrentUser ? 'bg-primary text-white' : 'bg-light'}" style="max-width: 75%;">
+                    <div class="card-body py-2 px-3">
+                        <p class="mb-1">${message.text}</p>
+                        <small class="${isFromCurrentUser ? 'text-white-50' : 'text-muted'}">${timeString}</small>
+                    </div>
+                </div>
+            </div>
+            `;
+            
+            // Add to messages list
+            messagesList.insertAdjacentHTML('beforeend', messageHtml);
+            
+            // Scroll to bottom
+            messagesList.scrollTop = messagesList.scrollHeight;
+            
+            // Mark as read if not from current user
+            if (!isFromCurrentUser) {
+                markMessageAsRead(message.id);
+            }
+        }
+        
+        // Load messages for the current chat
+        async function loadMessages() {
+            try {
+                const response = await api.get(`{{ api_endpoints.chat_messages }}`);
+                if (response && response.success) {
+                    renderMessages(response.data);
+                } else {
+                    showError('Failed to load messages');
+                }
+            } catch (error) {
+                showError('Error loading messages: ' + error.message);
+            }
+        }
+        
+        // Render messages to the UI
+        function renderMessages(messages) {
+            if (!messages || messages.length === 0) {
+                messagesList.innerHTML = `
+                <div class="d-flex justify-content-center align-items-center h-100">
+                    <div class="text-center text-muted">
+                        <p>No messages yet</p>
+                        <p>Start the conversation by sending a message</p>
+                    </div>
+                </div>
+                `;
+                return;
+            }
+            
+            messagesList.innerHTML = '';
+            messages.forEach(message => {
+                addMessageToUI(message);
+            });
+        }
+        
+        // Send a message
+        async function sendMessage(text) {
+            if (!text.trim()) return;
+            
+            // Generate a unique idempotency key
+            const idempotencyKey = Date.now().toString() + '-' + Math.random().toString(36).substr(2, 9);
+            
+            try {
+                const response = await api.post(`/api/messages/${chatId}`, {
+                    text: text.trim(),
+                    idempotency_key: idempotencyKey
+                });
+                
+                if (response && response.success) {
+                    // Message will be added via WebSocket
+                    console.log('Message sent successfully');
+                    
+                    // Clear the input and delete the draft
+                    messageInput.value = '';
+                    deleteDraft();
+                } else {
+                    console.error('Failed to send message:', response);
+                    alert('Failed to send message: ' + (response.data ? response.data.detail : 'Unknown error'));
+                }
+            } catch (error) {
+                console.error('Error sending message:', error);
+                alert('Error sending message: ' + error.message);
+            }
+        }
+        
+        // Mark a message as read
+        async function markMessageAsRead(messageId) {
+            try {
+                await api.post(`{{ api_endpoints.messages }}/read`, {
+                    message_ids: [messageId]
+                });
+            } catch (error) {
+                console.error('Error marking message as read:', error);
+            }
+        }
+        
+        // Event listeners
+        
+        // Send message form
+        messageForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            const text = messageInput.value.trim();
+            if (text) {
+                sendMessage(text);
+            }
+        });
+        
+        // Message input for draft saving
+        messageInput.addEventListener('input', function() {
+            saveDraft(this.value);
+        });
+        
+        // Refresh button
+        refreshBtn.addEventListener('click', loadMessages);
+        
+        // View participants button
+        if (viewParticipantsBtn) {
+            viewParticipantsBtn.addEventListener('click', function() {
+                participantsModal.show();
+            });
+        }
+        
+        // Add participant button (for group chats)
+        if (addParticipantBtn) {
+            addParticipantBtn.addEventListener('click', function() {
+                addParticipantModal.show();
+            });
+        }
+        
+        // Leave group button (for group chats)
+        if (leaveGroupBtn) {
+            leaveGroupBtn.addEventListener('click', async function() {
+                if (confirm('Are you sure you want to leave this group?')) {
+                    try {
+                        const response = await api.delete(`{{ api_endpoints.chat_participants }}/${userId}`);
+                        if (response && response.success) {
+                            window.location.href = '/web/chats';
+                        } else {
+                            alert('Failed to leave group');
+                        }
+                    } catch (error) {
+                        alert('Error leaving group: ' + error.message);
+                    }
+                }
+            });
+        }
+        
+        // User search for adding participants
+        if (userSearch) {
+            userSearch.addEventListener('input', debounce(async function() {
+                const searchTerm = this.value.trim();
+                if (searchTerm.length < 2) {
+                    userSearchResults.innerHTML = '<div class="text-center py-2 text-muted">Type at least 2 characters to search</div>';
+                    return;
+                }
+                
+                try {
+                    const response = await api.get(`{{ api_endpoints.users }}?search=${encodeURIComponent(searchTerm)}`);
+                    if (response && response.success) {
+                        renderUserSearchResults(response.data);
+                    } else {
+                        userSearchResults.innerHTML = '<div class="text-center py-2 text-danger">Search failed</div>';
+                    }
+                } catch (error) {
+                    userSearchResults.innerHTML = `<div class="text-center py-2 text-danger">Error: ${error.message}</div>`;
+                }
+            }, 300));
+        }
+        
+        // Render user search results
+        function renderUserSearchResults(users) {
+            if (!users || users.length === 0) {
+                userSearchResults.innerHTML = '<div class="text-center py-2">No users found</div>';
+                return;
+            }
+            
+            // Filter out current user and users already in the chat
+            const existingParticipantIds = JSON.parse('{{ chat.participants|map(attribute="id")|list|tojson|safe }}');
+            users = users.filter(user => !existingParticipantIds.includes(user.id));
+            
+            if (users.length === 0) {
+                userSearchResults.innerHTML = '<div class="text-center py-2">No additional users found</div>';
+                return;
+            }
+            
+            let html = '';
+            users.forEach(user => {
+                const displayName = user.name || user.username;
+                const initials = user.name ? user.name.substring(0, 2).toUpperCase() : user.username.substring(0, 2).toUpperCase();
+                html += `
+                <div class="list-group-item list-group-item-action d-flex align-items-center">
+                    <div class="avatar rounded-circle bg-primary text-white d-flex align-items-center justify-content-center me-2" style="width: 32px; height: 32px; font-size: 14px;">${initials}</div>
+                    <div class="flex-grow-1">
+                        <h6 class="mb-1">${displayName}</h6>
+                        <small class="text-muted">@${user.username}</small>
+                    </div>
+                    <button class="btn btn-sm btn-primary add-user-btn" data-user-id="${user.id}">Add</button>
+                </div>
+                `;
+            });
+            
+            userSearchResults.innerHTML = html;
+            
+            // Add event listeners to add buttons
+            userSearchResults.querySelectorAll('.add-user-btn').forEach(button => {
+                button.addEventListener('click', async function() {
+                    const userId = this.getAttribute('data-user-id');
+                    try {
+                        const response = await api.post(`{{ api_endpoints.chat_participants }}`, {
+                            user_id: userId
+                        });
+                        
+                        if (response && response.success) {
+                            addParticipantModal.hide();
+                            alert('User added successfully');
+                            // Reload the page to refresh participants list
+                            window.location.reload();
+                        } else {
+                            alert('Failed to add user');
+                        }
+                    } catch (error) {
+                        alert('Error adding user: ' + error.message);
+                    }
+                });
+            });
+        }
+        
+        // Utility function for debouncing
+        function debounce(func, wait) {
+            let timeout;
+            return function(...args) {
+                const context = this;
+                clearTimeout(timeout);
+                timeout = setTimeout(() => func.apply(context, args), wait);
+            };
+        }
+        
+        // Show error message
+        function showError(message) {
+            messagesList.innerHTML = `<div class="text-center py-4 text-danger">${message}</div>`;
+        }
+        
+        // Initialize
+        function initialize() {
+            // Scroll messages to bottom
+            messagesList.scrollTop = messagesList.scrollHeight;
+            
+            // Initialize WebSocket connections
+            initWebSocket();
+            initDraftWebSocket();
+        }
+        
+        // Run initialization
+        initialize();
+    });
+</script>
+{% endblock %} 

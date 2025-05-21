@@ -1,26 +1,35 @@
-FROM python:3.11-slim
+FROM --platform=$BUILDPLATFORM python:3.12-bookworm
 
 WORKDIR /app
 
-# Install Poetry
-RUN pip install poetry==1.7.1
+COPY pyproject.toml poetry.lock ./
 
-# Copy Poetry configuration
-COPY pyproject.toml poetry.lock* /app/
+ENV PYTHONPATH=./
+ENV PYTHONUNBUFFERED=True
 
-# Configure Poetry
-RUN poetry config virtualenvs.create false \
-    && poetry install --no-interaction --no-ansi --no-dev
+ARG DOCKER_TAG
+ARG IMAGE
+ARG REPO
+ARG BUILDPLATFORM
+ENV APP_VERSION=$DOCKER_TAG
+ENV IMAGE=$IMAGE
+ENV BUILDPLATFORM=$BUILDPLATFORM
 
-# Copy application code
-COPY src /app/src
+RUN echo "Building Docker image $IMAGE:$APP_VERSION for $BUILDPLATFORM"
 
-# Set environment variables
-ENV PYTHONPATH=/app
-ENV PYTHONUNBUFFERED=1
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends
 
-# Expose port
-EXPOSE 8000
+RUN rm -rf /var/lib/apt/lists/*
 
-# Run the application
-CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"] 
+RUN python -m ensurepip --upgrade && \
+    pip install --upgrade pip
+
+RUN pip install poetry
+
+RUN poetry config virtualenvs.create false && \
+    poetry install --only main --no-interaction --no-ansi
+
+COPY . .
+
+CMD ["poetry", "run", "python", "-m", "src.main"]

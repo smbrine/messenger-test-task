@@ -17,7 +17,7 @@ class DatabaseSettings:
     url: str = field(
         default_factory=lambda: os.getenv(
             "DATABASE_URL", 
-            "postgresql+asyncpg://postgres:postgres@localhost:5432/messenger"
+            "postgresql+asyncpg://postgres:postgres@postgres:5432/messenger"
         )
     )
     echo: bool = field(default_factory=lambda: os.getenv("DB_ECHO", "False").lower() == "true")

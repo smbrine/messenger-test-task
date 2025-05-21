@@ -9,6 +9,7 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 # Import project metadata and models
+from src.config.settings import get_settings
 from src.infrastructure.database.database import Base
 # Import models to register them with SQLAlchemy metadata
 from src.infrastructure.database.models.user import UserModel  # noqa
@@ -17,6 +18,8 @@ from src.infrastructure.database.models.chat import ChatModel, ChatParticipantMo
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
 config = context.config
+settings = get_settings()
+config.set_main_option("sqlalchemy.url", settings.db.url)
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.

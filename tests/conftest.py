@@ -226,6 +226,13 @@ async def db_session(test_db_engine):
     await transaction.rollback()
     await connection.close()
 
+@pytest_asyncio.fixture
+async def redis_client(redis_container):
+    """
+    Create a Redis client for testing.
+    """
+    return get_redis_client()
+
 
 # Helper utility for testing
 def generate_uuid() -> uuid.UUID:

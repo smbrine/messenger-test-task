@@ -51,10 +51,10 @@ def create_app() -> FastAPI:
         return {"status": "ok"}
 
     # Add API routers
-    app.include_router(user_router, prefix="/api/users", tags=["Users"])
-    app.include_router(chat_router, prefix="/api/chats", tags=["Chats"])
-    app.include_router(message_router, prefix="/api/messages", tags=["Messages"])
-    app.include_router(auth_router, prefix="/api/auth", tags=["Auth"])
+    app.include_router(user_router, prefix="/api", tags=["Users"])
+    app.include_router(chat_router, prefix="/api", tags=["Chats"])
+    app.include_router(message_router, prefix="/api", tags=["Messages"])
+    app.include_router(auth_router, prefix="/api", tags=["Auth"])
     
     # Add WebSocket routes
     app.include_router(websocket_routes.router, tags=["WebSocket"])

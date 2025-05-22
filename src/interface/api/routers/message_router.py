@@ -12,39 +12,15 @@ from src.domain.models.user import User
 from src.interface.api.dependencies import get_current_user, get_message_service, get_read_status_manager
 from src.application.services.message_service import MessageService
 from src.application.services.read_status_manager import ReadStatusManager
+from src.interface.api.models.message import MessageRequest, MessageResponse, ReadMessageRequest, ReadStatusResponse
 
-router = APIRouter()
-
-
-class MessageRequest(BaseModel):
-    """Message request model for sending messages."""
-    text: str = Field(..., min_length=1, max_length=4000)
-    idempotency_key: str = Field(..., min_length=3, max_length=64)
+router = APIRouter(tags=["Messages"])
 
 
-class MessageResponse(BaseModel):
-    """Message response model."""
-    id: str
-    chat_id: str
-    sender_id: str
-    text: str
-    created_at: str
-    updated_at: str
-    is_read: bool = False
 
 
-class ReadMessageRequest(BaseModel):
-    """Request model for marking messages as read."""
-    message_ids: t.List[str]
-
-
-class ReadStatusResponse(BaseModel):
-    """Response model for read status operations."""
-    marked_count: int
-    success: bool
-
-
-@router.get("/{chat_id}", response_model=t.List[MessageResponse])
+@router.get("/messages/{chat_id}", response_model=t.List[MessageResponse])
+@router.get("/history/{chat_id}", response_model=t.List[MessageResponse])
 async def get_chat_messages(
     chat_id: uuid.UUID = Path(..., description="The ID of the chat to get messages from"),
     limit: int = Query(50, ge=1, le=100, description="Maximum number of messages to return"),
@@ -87,7 +63,7 @@ async def get_chat_messages(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.post("/{chat_id}", response_model=MessageResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/messages/{chat_id}", response_model=MessageResponse, status_code=status.HTTP_201_CREATED)
 async def send_message(
     message_request: MessageRequest,
     chat_id: uuid.UUID = Path(..., description="The ID of the chat to send a message to"),
@@ -118,7 +94,7 @@ async def send_message(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.post("/{message_id}/read", response_model=ReadStatusResponse)
+@router.post("/messages/{message_id}/read", response_model=ReadStatusResponse)
 async def mark_message_as_read(
     message_id: uuid.UUID = Path(..., description="The ID of the message to mark as read"),
     current_user: User = Depends(get_current_user),
@@ -146,7 +122,7 @@ async def mark_message_as_read(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.post("/read/batch", response_model=ReadStatusResponse)
+@router.post("/messages/read/batch", response_model=ReadStatusResponse)
 async def mark_messages_as_read(
     read_request: ReadMessageRequest,
     current_user: User = Depends(get_current_user),
@@ -185,7 +161,7 @@ async def mark_messages_as_read(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.post("/{chat_id}/read_all", response_model=ReadStatusResponse)
+@router.post("/messages/{chat_id}/read_all", response_model=ReadStatusResponse)
 async def mark_all_chat_messages_as_read(
     chat_id: uuid.UUID = Path(..., description="The ID of the chat"),
     current_user: User = Depends(get_current_user),
@@ -205,7 +181,7 @@ async def mark_all_chat_messages_as_read(
         raise HTTPException(status_code=400, detail=str(e))
 
 
-@router.get("/{chat_id}/unread_count", response_model=dict)
+@router.get("/messages/{chat_id}/unread_count", response_model=dict)
 async def get_unread_message_count(
     chat_id: uuid.UUID = Path(..., description="The ID of the chat"),
     current_user: User = Depends(get_current_user),

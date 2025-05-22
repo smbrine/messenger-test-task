@@ -24,7 +24,7 @@ from src.domain.models.auth import TokenPair
 
 
 # Create router
-router = APIRouter()
+router = APIRouter(prefix="/users", tags=["Users"])
 
 
 @router.get("/me", response_model=UserResponse)
